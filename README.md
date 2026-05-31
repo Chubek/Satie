@@ -2,7 +2,7 @@
 
 **This library has been created with the help of GPT 3.5 Codex, if you have moral quandries against using AI-generated libraries, this is your time to close this tab, and use another minimal library like PicoSAT or MiniSAT**.
 
-Were Satie and DeBussy friends? Surely, Saite loved DeBussy. 
+Were Satie and DeBussy friends? Surely, Satie loved DeBussy. 
 
 Satie is a small-footprint, minimal, header-only library that implements a naive SAT solver, DPPL adn CDCL algorithms. CND and DIMAC are both provided in `Common.hpp`, and all three files import it.
 
