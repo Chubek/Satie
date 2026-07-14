@@ -1,19 +1,89 @@
 # Satie: Small, Header-Only, Multi-Algorithm SAT Solver
 
-**This library has been created with the help of GPT 3.5 Codex, if you have moral quandries against using AI-generated libraries, this is your time to close this tab, and use another minimal library like PicoSAT or MiniSAT**.
+**This library has been created with the help of GPT 3.5 Codex, if you have moral qualms about using AI-generated libraries, this is your time to close this tab, and use another minimal library like PicoSAT or MiniSAT**.
 
-Were Satie and DeBussy friends? Surely, Satie loved DeBussy. 
+Satie is a small-footprint, minimal, header-only library that implements a naive (exhaustive) SAT solver, DPLL, and CDCL algorithms. CNF and DIMACS parsing are provided in `Common.hpp`, and all solver headers include it.
 
-Satie is a small-footprint, minimal, header-only library that implements a naive SAT solver, DPPL adn CDCL algorithms. CNF and DIMAC are both provided in `Common.hpp`, and all three files import it.
+A manual has been provided in `docs/manual/`, covering theory, encoding, algorithms, and the public API.
 
-A manual has been provided, which is as detiled as you wish for an AI-generated manual to be. But it's enough to teach you how to encode boolean variables using either the API provided by the three algorithms, DIMAC or CNF.
+SAT is NP-complete; don't expect a tiny library to be end-all. See *The Handbook of Satisfiability* for background.
 
-The precision of this library remains untested. I made Satie for my own use. But you are free to use it as well. The library is licensed under MIT, but technically, since this is AI-generated code, only God owns it.
+~ Chubak
 
-I did not slop out this library. I scaffolded the filess, with placholder comments and boilerplatecode. This library is 100% halal for use, even if you are anti-AI. This library is unique, you cannot find one like it. PicoSAT and MiniSAT both use oblique heuristics. I use actual, established algorithms.
+---
 
-SAT is, as you know, NP-hard, and thusly, NP-Complete. So don't expect a tiny library like this to be end-all, be-all in finding satisfiability in boolean formulas. I highliy recommend *The Handbook of Satisfiability* if you wanna brush up on your SAT.
+## Build
 
-I plan on adding GPU kernels to this library. I am looking for a small, header-only library that uses OpenCL to create kernels. If you know such library, my contacts are in my [Github frontpage](https://github.com/Chubek) along with all my projects. I separate my AI-generated slopware from the software I toiled over, but it's becoming harder and harder.
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+cd build && ctest
+```
 
-~ Thanks, Chubak
+Requirements: a C++20 compiler. The library, CLI, REPL, tests, and examples
+depend only on the standard library.
+
+## Components
+
+| Path | Description |
+|------|-------------|
+| `include/Common.hpp` | Core types: `Var`, `Lit`, `Clause`, `CNF`, `Assignment`, `SolveResult`, DIMACS + CNF DSL parsers. |
+| `include/DSLtk.hpp` | Header-only combinatory parser / AST toolkit (`dsl::` namespace). |
+| `include/SatieDPLL.hpp` | DPLL engine: unit propagation, pure literals, backtracking. |
+| `include/SatieCDCL.hpp` | CDCL engine: conflict analysis, clause learning, backjumping. |
+| `include/SatieNative.hpp` | Exhaustive baseline + model counter. |
+| `include/Satie.hpp` | Unified facade: `Solver`, `Engine`, parse entry points. |
+| `cli/satie-cli.cpp` | Non-interactive batch driver. |
+| `cli/satie-repl.cpp` | Interactive REPL (standard-library only, syntax highlighting). |
+| `cli/Satie.syn` | DSL token → ANSI color definition consumed by the REPL. |
+| `tests/` | 30 Catch2-compatible tests (Common, DSLtk, solvers). |
+| `docs/` | Doxygen config + 8-chapter manual. |
+| `distrib/` | Shell completions, Vim/Neovim, Sublime, LSP scaffold. |
+| `examples/` | API, DSL, and NativeDSL examples. |
+
+## Usage
+
+```cpp
+#include "Satie.hpp"
+satie::CNF cnf({{1, 2}, {-1, 3}});
+std::cout << satie::Solver(cnf).satisfiable(); // 1 (SAT)
+```
+
+CLI:
+
+```sh
+satie-cli --engine cdcl --model formula.cnf
+```
+
+REPL:
+
+```sh
+satie-repl
+satie> (a | b) & (~a | c)
+satie> :solve
+satie> :model
+```
+
+## Build options
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `INSTALL_CLI` | `ON` | Build and install `satie-cli` / `satie-repl`. |
+| `BUILD_TESTING` | `ON` | Build the Catch2 test suite. |
+| `BUILD_EXAMPLES` | `ON` | Build example programs. |
+| `GENERATE_DOCS` | `OFF` | Run Doxygen to generate API docs. |
+| `INSTALL_FISH/ZSH/BASH/VIM/LSP/SUBLIME` | `OFF` | Install distribution assets. |
+
+## Roadmap (Satie Protocol)
+
+- [x] **Phase 1** — `DSLtk.hpp` combinatory parser toolkit.
+- [x] **Phase 2** — CLI + REPL (`cli/satie-repl.cpp`), syntax highlighting (`Satie.syn`).
+- [x] **Phase 3** — Documentation: `docs/manual/` (8 chapters), `FrontPage.md`, `Doxyfile.in`.
+- [x] **Phase 4** — Build system: namespaced `satie::satie`, gated subdirectories.
+- [x] **Phase 5** — Unit tests: 30 cases (Common / DSLtk / solvers), CTest-registered.
+- [x] **Phase 6** — Distribution: Fish, Zsh, Bash, Vim, Sublime, LSP scaffold.
+- [x] **Phase 7** — Examples: API, DSL (N-Queens, pigeonhole), NativeDSL.
+
+## License
+
+MIT. Technically, since this is AI-generated code, only God owns it.
