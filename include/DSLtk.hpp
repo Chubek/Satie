@@ -345,6 +345,9 @@
 
 #pragma once
 
+#ifndef SATIE_DSLTK_SHARED_INCLUDED
+#define SATIE_DSLTK_SHARED_INCLUDED
+
 #include <algorithm>
 #include <array>
 #include <concepts>
@@ -2578,3 +2581,5 @@ template <typename T>
 concept Rewritable = HasFeature<T, Rewrite> && requires { T::rules; };
 
 } // namespace dsl
+
+#endif

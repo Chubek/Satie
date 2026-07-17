@@ -26,6 +26,7 @@ option(INSTALL_CLI   "Build and install the satie CLI/REPL"            ON)
 option(BUILD_TESTING "Build the Catch2 unit-test suite"                ON)
 option(BUILD_EXAMPLES "Build the example programs"                     ON)
 option(GENERATE_DOCS "Generate Doxygen documentation"                  OFF)
+option(BUILD_STDPLUGIN "Build the standard Satie plugins"              ON)
 
 # ------------------------------------------------------------
 # Engine library  (namespaced: satie::satie)
@@ -63,6 +64,10 @@ if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
+if(BUILD_STDPLUGIN)
+  add_subdirectory(stdplugin)
+endif()
+
 add_subdirectory(distrib)
 add_subdirectory(docs)
 
@@ -77,6 +82,20 @@ install(TARGETS satie
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp")
+
+install(FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/include/QaMRpp.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/include/QaMRpp-Plugin.hpp
+  DESTINATION third_party/QaMRpp/include)
+
+install(FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/lib/QaMRpp-Library.h
+  DESTINATION third_party/QaMRpp/lib)
+
+install(FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/third_party/SerdeTk/SerdeTk.hpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/third_party/SerdeTk/DSLUtils.hpp
+  DESTINATION third_party/QaMRpp/third_party/SerdeTk)
 
 install(EXPORT SatieTargets
   FILE SatieTargets.cmake

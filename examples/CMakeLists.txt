@@ -11,3 +11,5 @@ target_link_libraries(example_build_ast   PRIVATE satie::satie)
 # users can load them via the REPL/CLI.
 install(FILES DSL/nqueens.satie DSL/pigeonhole.satie
   DESTINATION ${CMAKE_INSTALL_DATADIR}/satie/examples)
+
+install(DIRECTORY Lua DESTINATION ${CMAKE_INSTALL_DATADIR}/satie/examples)

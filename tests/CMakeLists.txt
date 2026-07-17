@@ -7,6 +7,7 @@ add_executable(satie_tests
   catch_shim.hpp
   test_common.hpp
   test_dsltk.hpp
+  test_plugins.hpp
   test_solvers.hpp)
 
 target_link_libraries(satie_tests PRIVATE satie::satie)
