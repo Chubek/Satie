@@ -1,12 +1,12 @@
 /**
- * @file DSLtk.hpp
+ * @file DomDSL.hpp
  * @brief Header-only DSL construction toolkit for modern C++ (C++20)
  *
  * ============================================================
  *  OVERVIEW
  * ============================================================
  *
- * DSLtk.hpp provides a set of composable "feature mixins" that you
+ * DomDSL.hpp provides a set of composable "feature mixins" that you
  * attach to a CRTP base class to build Domain-Specific Languages entirely
  * in headers, with zero runtime overhead where possible.
  *
@@ -38,10 +38,10 @@
  *
  * Step 3 — Expose to users via a thin wrapper header (mydsl.hpp):
  *
- *   #include "DSLtk.hpp"
+ *   #include "DomDSL.hpp"
  *   struct MathDSL : dsl::DSL<MathDSL, dsl::Pipeline, dsl::Operators> { ... };
  *
- * Users only include mydsl.hpp — they never see DSLtk.hpp directly.
+ * Users only include mydsl.hpp — they never see DomDSL.hpp directly.
  *
  * ============================================================
  *  FEATURE REFERENCE
@@ -339,7 +339,7 @@
  *
  *   - C++20 or later (uses concepts, NTTPs, constexpr lambdas)
  *   - No external dependencies
- *   - Header-only: just #include "DSLtk.hpp"
+ *   - Header-only: just #include "DomDSL.hpp"
  * ============================================================
  */
 
@@ -362,6 +362,10 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+#if __cplusplus < 202002L
+#error "DomDSL.hpp requires C++20 or later, compile it with -std=c++20"
+#endif
 
 namespace dsl
 {
@@ -836,8 +840,8 @@ template <typename F> struct OtherwiseClause
 
   template <typename K, typename... Args>
   constexpr bool
-  try_invoke (K, std::optional<std::invoke_result_t<F, K, Args...>> &, Args &&...)
-    const
+  try_invoke (K, std::optional<std::invoke_result_t<F, K, Args...>> &,
+              Args &&...) const
   {
     return false;
   }
@@ -900,17 +904,21 @@ template <typename... Clauses> struct MatchTable
         std::apply (
             [&] (const auto &...c)
               {
-                (([&] {
-                   using Cls = std::remove_cvref_t<decltype (c)>;
-                   if constexpr (std::is_same_v<
-                                     Cls,
-                                     OtherwiseClause<typename Cls::handler_type_or_void>>)
-                     {
-                       has_otherwise = true;
-                       if (!result)
-                         result = c.handler (key, std::forward<Args> (args)...);
-                     }
-                 }()),
+                ((
+                     [&]
+                       {
+                         using Cls = std::remove_cvref_t<decltype (c)>;
+                         if constexpr (std::is_same_v<
+                                           Cls, OtherwiseClause<
+                                                    typename Cls::
+                                                        handler_type_or_void>>)
+                           {
+                             has_otherwise = true;
+                             if (!result)
+                               result = c.handler (
+                                   key, std::forward<Args> (args)...);
+                           }
+                       }()),
                  ...);
               },
             clauses);
@@ -2196,9 +2204,21 @@ template <typename T> struct ExpectedResult
     return out;
   }
 
-  explicit operator bool () const { return value.has_value (); }
-  T &operator* () { return *value; }
-  const T &operator* () const { return *value; }
+  explicit
+  operator bool () const
+  {
+    return value.has_value ();
+  }
+  T &
+  operator* ()
+  {
+    return *value;
+  }
+  const T &
+  operator* () const
+  {
+    return *value;
+  }
 };
 
 /**
@@ -2351,33 +2371,36 @@ template <typename T>
 Parser<T>
 try_parse (const Parser<T> &p)
 {
-  return parser ([p] (ParsecInput &in) -> ExpectedResult<T> {
-    auto save = in.pos;
-    auto r = p (in);
-    if (!r)
-      {
-        in.pos = save;
-        r.error.kind = ParseFailureKind::Soft;
-      }
-    return r;
-  });
+  return parser (
+      [p] (ParsecInput &in) -> ExpectedResult<T>
+        {
+          auto save = in.pos;
+          auto r = p (in);
+          if (!r)
+            {
+              in.pos = save;
+              r.error.kind = ParseFailureKind::Soft;
+            }
+          return r;
+        });
 }
 
 template <typename T>
 Parser<T>
 labeled (const Parser<T> &p, std::string expected)
 {
-  return parser ([p, expected = std::move (expected)] (
-                     ParsecInput &in) -> ExpectedResult<T> {
-    auto r = p (in);
-    if (!r)
-      r.error.expected = { expected };
-    return r;
-  });
+  return parser (
+      [p,
+       expected = std::move (expected)] (ParsecInput &in) -> ExpectedResult<T>
+        {
+          auto r = p (in);
+          if (!r)
+            r.error.expected = { expected };
+          return r;
+        });
 }
 
-template <typename T>
-struct ParseOutcome
+template <typename T> struct ParseOutcome
 {
   std::optional<T> value{};
   ParseError error{};
@@ -2393,7 +2416,8 @@ run_parser (const Parser<T> &p, std::string_view source)
     return { std::nullopt, r.error };
   if (!in.eof ())
     {
-      ParseError trailing{ in.pos, ParseFailureKind::Committed,
+      ParseError trailing{ in.pos,
+                           ParseFailureKind::Committed,
                            { "<end-of-input>" } };
       return { std::nullopt, trailing };
     }
@@ -2403,26 +2427,28 @@ run_parser (const Parser<T> &p, std::string_view source)
 inline Parser<char>
 ch (char c)
 {
-  return labeled (
-      parser ([c] (ParsecInput &in) -> ExpectedResult<char> {
-        if (in.peek () == c)
-          return in.consume ();
-        return fail_expected<char> (in, std::string (1, c));
-      }),
-      std::string (1, c));
+  return labeled (parser (
+                      [c] (ParsecInput &in) -> ExpectedResult<char>
+                        {
+                          if (in.peek () == c)
+                            return in.consume ();
+                          return fail_expected<char> (in, std::string (1, c));
+                        }),
+                  std::string (1, c));
 }
 
 inline Parser<char>
 satisfy (std::function<bool (char)> pred, std::string label)
 {
-  return labeled (
-      parser ([pred = std::move (pred), label] (
-                  ParsecInput &in) -> ExpectedResult<char> {
-        if (!in.eof () && pred (in.peek ()))
-          return in.consume ();
-        return fail_expected<char> (in, label);
-      }),
-      std::move (label));
+  return labeled (parser (
+                      [pred = std::move (pred),
+                       label] (ParsecInput &in) -> ExpectedResult<char>
+                        {
+                          if (!in.eof () && pred (in.peek ()))
+                            return in.consume ();
+                          return fail_expected<char> (in, label);
+                        }),
+                  std::move (label));
 }
 
 enum class TaskPolicy
@@ -2479,7 +2505,7 @@ run (TaskState &state, const TaskChain &chain, Args &&...)
   for (const auto &task : chain.tasks)
     {
       auto result = task.run (state);
-    state.results.insert_or_assign (task.name, result);
+      state.results.insert_or_assign (task.name, result);
       if (result.is_err () && chain.policy == TaskPolicy::StopOnError)
         break;
       if (state.suspended)
@@ -2591,9 +2617,7 @@ struct PEGChannel
 {
   std::string name{ "@DEFAULT" };
 
-  constexpr bool
-  operator== (const PEGChannel &) const
-      = default;
+  constexpr bool operator== (const PEGChannel &) const = default;
 
   /// @return true if this is the built-in @IGNORE channel.
   bool
@@ -2642,9 +2666,9 @@ struct PEGMatch
   PEGChannel channel{};       ///< resolved channel of the rule
   void *user_data{ nullptr }; ///< optional extension point
 
-  std::size_t line{ 1 };      ///< 1-based line of `begin`
-  std::size_t column{ 1 };    ///< 1-based column of `begin`
-  bool ignored{ false };      ///< true if routed to @IGNORE
+  std::size_t line{ 1 };   ///< 1-based line of `begin`
+  std::size_t column{ 1 }; ///< 1-based column of `begin`
+  bool ignored{ false };   ///< true if routed to @IGNORE
 
   /// @return length of the matched text (end - begin).
   std::size_t
@@ -2667,12 +2691,12 @@ struct CompiledPattern
 {
   struct Atom
   {
-    bool any{ false };        ///< '.' wildcard
-    bool is_class{ false };   ///< [...]
-    bool negate{ false };     ///< [^...]
-    char ch{ 0 };             ///< literal character
-    std::string cls{};        ///< class body, e.g. "a-z0-9"
-    char quant{ 0 };          ///< 0, '*', '+', '?', '!'
+    bool any{ false };      ///< '.' wildcard
+    bool is_class{ false }; ///< [...]
+    bool negate{ false };   ///< [^...]
+    char ch{ 0 };           ///< literal character
+    std::string cls{};      ///< class body, e.g. "a-z0-9"
+    char quant{ 0 };        ///< 0, '*', '+', '?', '!'
   };
 
   std::vector<Atom> atoms{};
@@ -2780,17 +2804,18 @@ struct CompiledPattern
             while (avail () && atom_test (a, text[pos]))
               ++pos;
             break;
-          case '+': {
-            std::size_t n = 0;
-            while (avail () && atom_test (a, text[pos]))
-              {
-                ++pos;
-                ++n;
-              }
-            if (n == 0)
-              return std::nullopt;
-            break;
-          }
+          case '+':
+            {
+              std::size_t n = 0;
+              while (avail () && atom_test (a, text[pos]))
+                {
+                  ++pos;
+                  ++n;
+                }
+              if (n == 0)
+                return std::nullopt;
+              break;
+            }
           case '?':
             if (avail () && atom_test (a, text[pos]))
               ++pos;
@@ -2832,10 +2857,10 @@ line_col_at (std::string_view text, std::size_t pos, std::size_t &line,
 /// A lightweight match-arm consumed by PEGMatcher::operator<<.
 struct PEGArm
 {
-  PEGRule *rule{ nullptr };      ///< nullptr => wildcard
+  PEGRule *rule{ nullptr }; ///< nullptr => wildcard
   PEGSemanticAction action{};
   bool is_wildcard{ false };
-  bool is_channel{ false };      ///< match any rule on `channel`
+  bool is_channel{ false }; ///< match any rule on `channel`
   PEGChannel channel{};
 };
 
@@ -2857,10 +2882,10 @@ struct PEGRule
   peg_detail::CompiledPattern compiled{};
   PEGSemanticAction semantic_action{};
   PEGChannel channel{ "@DEFAULT" };
-  bool must_fail{ false };    ///< succeed only when the pattern fails
-  bool fire_on_neg{ false };  ///< run the action even on negated success
+  bool must_fail{ false };        ///< succeed only when the pattern fails
+  bool fire_on_neg{ false };      ///< run the action even on negated success
   PEGRule *if_succeed{ nullptr }; ///< rule to attempt when pattern matches
-  std::size_t order{ 0 };     ///< declaration order (PEG precedence)
+  std::size_t order{ 0 };         ///< declaration order (PEG precedence)
 
   /// Attempts this rule at `pos`. Returns the match end offset, or
   /// std::nullopt on failure. For must_fail rules, success consumes one
@@ -3051,8 +3076,8 @@ struct PEGDefinition
             result.success = false;
             result.offset = pos;
             peg_detail::line_col_at (text, pos, result.line, result.column);
-            result.message = "no PEG rule matched at offset "
-                             + std::to_string (pos);
+            result.message
+                = "no PEG rule matched at offset " + std::to_string (pos);
             return result;
           }
       }
@@ -3314,8 +3339,7 @@ private:
   FilterMode mode_{ FilterMode::All };
   std::vector<std::string> channels_{};
   std::vector<peg_detail::PEGArm> arms_{};
-  static constexpr std::size_t npos
-      = static_cast<std::size_t> (-1);
+  static constexpr std::size_t npos = static_cast<std::size_t> (-1);
 };
 
 /// Creates a fluent PEG matcher over `text` for the grammar `peg`.
@@ -3346,18 +3370,20 @@ template <typename T>
 Parser<PEGMatch>
 as_span_parser (const Parser<T> &p)
 {
-  return parser ([p] (ParsecInput &in) -> ExpectedResult<PEGMatch> {
-    std::size_t begin = in.pos;
-    auto r = p (in);
-    if (!r)
-      return ExpectedResult<PEGMatch>::failure (r.error.pos, r.error.kind,
-                                                r.error.expected);
-    PEGMatch m;
-    m.begin = begin;
-    m.end = in.pos;
-    m.value = in.get_span (begin);
-    return m;
-  });
+  return parser (
+      [p] (ParsecInput &in) -> ExpectedResult<PEGMatch>
+        {
+          std::size_t begin = in.pos;
+          auto r = p (in);
+          if (!r)
+            return ExpectedResult<PEGMatch>::failure (
+                r.error.pos, r.error.kind, r.error.expected);
+          PEGMatch m;
+          m.begin = begin;
+          m.end = in.pos;
+          m.value = in.get_span (begin);
+          return m;
+        });
 }
 
 } // namespace peg_detail
@@ -3367,29 +3393,31 @@ template <typename A, typename B, typename... Rest>
 auto
 peg_seq (const Parser<A> &a, const Parser<B> &b, const Rest &...rest)
 {
-  auto ab = parser ([a, b] (ParsecInput &in) -> ExpectedResult<PEGMatch> {
-    std::size_t begin = in.pos;
-    auto ra = a (in);
-    if (!ra)
-      return ExpectedResult<PEGMatch>::failure (ra.error.pos, ra.error.kind,
-                                                ra.error.expected);
-    auto rb = b (in);
-    if (!rb)
-      {
-        bool consumed = in.pos != begin;
-        in.pos = begin;
-        auto kind = rb.error.kind;
-        if (consumed)
-          kind = ParseFailureKind::Committed;
-        return ExpectedResult<PEGMatch>::failure (rb.error.pos, kind,
-                                                  rb.error.expected);
-      }
-    PEGMatch m;
-    m.begin = begin;
-    m.end = in.pos;
-    m.value = in.get_span (begin);
-    return m;
-  });
+  auto ab = parser (
+      [a, b] (ParsecInput &in) -> ExpectedResult<PEGMatch>
+        {
+          std::size_t begin = in.pos;
+          auto ra = a (in);
+          if (!ra)
+            return ExpectedResult<PEGMatch>::failure (
+                ra.error.pos, ra.error.kind, ra.error.expected);
+          auto rb = b (in);
+          if (!rb)
+            {
+              bool consumed = in.pos != begin;
+              in.pos = begin;
+              auto kind = rb.error.kind;
+              if (consumed)
+                kind = ParseFailureKind::Committed;
+              return ExpectedResult<PEGMatch>::failure (rb.error.pos, kind,
+                                                        rb.error.expected);
+            }
+          PEGMatch m;
+          m.begin = begin;
+          m.end = in.pos;
+          m.value = in.get_span (begin);
+          return m;
+        });
   if constexpr (sizeof...(rest) == 0)
     return ab;
   else
@@ -3438,15 +3466,17 @@ template <typename T>
 auto
 peg_and (const Parser<T> &p)
 {
-  return parser ([p] (ParsecInput &in) -> ExpectedResult<bool> {
-    auto save = in.pos;
-    auto r = p (in);
-    in.pos = save;
-    if (!r)
-      return ExpectedResult<bool>::failure (r.error.pos, ParseFailureKind::Soft,
-                                            r.error.expected);
-    return true;
-  });
+  return parser (
+      [p] (ParsecInput &in) -> ExpectedResult<bool>
+        {
+          auto save = in.pos;
+          auto r = p (in);
+          in.pos = save;
+          if (!r)
+            return ExpectedResult<bool>::failure (
+                r.error.pos, ParseFailureKind::Soft, r.error.expected);
+          return true;
+        });
 }
 
 /// PEG negative lookahead: !a — succeeds if a fails, consumes nothing.
@@ -3454,36 +3484,40 @@ template <typename T>
 auto
 peg_not (const Parser<T> &p)
 {
-  return parser ([p] (ParsecInput &in) -> ExpectedResult<bool> {
-    auto save = in.pos;
-    auto r = p (in);
-    in.pos = save;
-    if (r)
-      return fail_expected<bool> (in, "negative lookahead");
-    return true;
-  });
+  return parser (
+      [p] (ParsecInput &in) -> ExpectedResult<bool>
+        {
+          auto save = in.pos;
+          auto r = p (in);
+          in.pos = save;
+          if (r)
+            return fail_expected<bool> (in, "negative lookahead");
+          return true;
+        });
 }
 
 /// Adapts a PEGRule into a Parser<PEGMatch> honoring must_fail.
 inline Parser<PEGMatch>
 peg_rule (const PEGRule &rule)
 {
-  return parser ([&rule] (ParsecInput &in) -> ExpectedResult<PEGMatch> {
-    std::size_t begin = in.pos;
-    auto end = rule.try_match (in.source, begin);
-    if (!end)
-      return fail_expected<PEGMatch> (in, rule.pattern_text);
-    in.pos = *end;
-    PEGMatch m;
-    m.begin = begin;
-    m.end = *end;
-    m.value = in.source.substr (begin, *end - begin);
-    m.rule = const_cast<PEGRule *> (&rule);
-    m.channel = rule.channel;
-    m.ignored = rule.channel.is_ignore ();
-    peg_detail::line_col_at (in.source, begin, m.line, m.column);
-    return m;
-  });
+  return parser (
+      [&rule] (ParsecInput &in) -> ExpectedResult<PEGMatch>
+        {
+          std::size_t begin = in.pos;
+          auto end = rule.try_match (in.source, begin);
+          if (!end)
+            return fail_expected<PEGMatch> (in, rule.pattern_text);
+          in.pos = *end;
+          PEGMatch m;
+          m.begin = begin;
+          m.end = *end;
+          m.value = in.source.substr (begin, *end - begin);
+          m.rule = const_cast<PEGRule *> (&rule);
+          m.channel = rule.channel;
+          m.ignored = rule.channel.is_ignore ();
+          peg_detail::line_col_at (in.source, begin, m.line, m.column);
+          return m;
+        });
 }
 
 /// Assigns a channel to a parser's PEGMatch result.
@@ -3491,22 +3525,24 @@ template <typename T>
 auto
 peg_channel (PEGChannel channel, const Parser<T> &p)
 {
-  return parser ([channel = std::move (channel), p] (
-                     ParsecInput &in) -> ExpectedResult<PEGMatch> {
-    std::size_t begin = in.pos;
-    auto r = p (in);
-    if (!r)
-      return ExpectedResult<PEGMatch>::failure (r.error.pos, r.error.kind,
-                                                r.error.expected);
-    PEGMatch m;
-    m.begin = begin;
-    m.end = in.pos;
-    m.value = in.get_span (begin);
-    m.channel = channel;
-    m.ignored = channel.is_ignore ();
-    peg_detail::line_col_at (in.source, begin, m.line, m.column);
-    return m;
-  });
+  return parser (
+      [channel = std::move (channel),
+       p] (ParsecInput &in) -> ExpectedResult<PEGMatch>
+        {
+          std::size_t begin = in.pos;
+          auto r = p (in);
+          if (!r)
+            return ExpectedResult<PEGMatch>::failure (
+                r.error.pos, r.error.kind, r.error.expected);
+          PEGMatch m;
+          m.begin = begin;
+          m.end = in.pos;
+          m.value = in.get_span (begin);
+          m.channel = channel;
+          m.ignored = channel.is_ignore ();
+          peg_detail::line_col_at (in.source, begin, m.line, m.column);
+          return m;
+        });
 }
 
 /// Overload accepting the channel name directly (must begin with '@').
