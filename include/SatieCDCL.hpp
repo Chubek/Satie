@@ -44,10 +44,6 @@ public:
   SolveResult solve ()
   {
     initialize ();
-    int initial = propagate_full ();
-    if (initial != -1)
-      return { SolveStatus::UNSAT, Assignment (original_.variable_count ()) };
-
     while (true)
       {
         int conflict = propagate_full ();
