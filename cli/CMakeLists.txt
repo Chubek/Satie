@@ -6,8 +6,7 @@ target_link_libraries(satie-cli PRIVATE satie::satie)
 add_executable(satie-repl satie-repl.cpp)
 target_link_libraries(satie-repl PRIVATE satie::satie)
 
+add_subdirectory(termscript)
+
 install(TARGETS satie-cli satie-repl
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-install(FILES Satie.syn
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/satie)

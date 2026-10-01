@@ -1,18 +1,9 @@
-# Satie LSP (scaffold)
+# Satie language server
 
-Reserved for a future Language Server Protocol implementation providing:
+Run `node server/index.js` from this directory and connect an LSP client over
+standard input and output. Requires Node.js 18 or newer; no npm install is needed.
 
-- DSL syntax diagnostics (delegates to the CNF parser in `Common.hpp`);
-- completion for REPL commands (`:load`, `:solve`, ...) and DSL operators;
-- hover docs for engine keywords (`native`, `dpll`, `cdcl`).
-
-## Structure
-
-```
-distrib/lsp/
-  package.json   — server manifest (to be populated)
-  server/        — server entry (to be populated)
-```
-
-The parser combinator toolkit in `DSLtk.hpp` is the intended backend for
-tokenization and diagnostic emission.
+The server supports document synchronization, DIMACS header/terminator checks,
+parenthesis diagnostics for the CNF DSL, command and engine completion, and hover
+for the SAT engines and common REPL commands. It does not run a theory solver or
+validate full CNF grammar; use `satie-cli` for authoritative parsing and solving.

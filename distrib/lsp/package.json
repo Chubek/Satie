@@ -1,7 +1,8 @@
 {
   "name": "satie-lsp",
-  "version": "0.0.1",
-  "description": "Language Server Protocol scaffold for the Satie DSL (placeholder)",
+  "version": "0.1.0",
+  "description": "Dependency-free language server for Satie CNF and DIMACS files",
   "private": true,
-  "engines": { "node": ">=18" }
+  "bin": {"satie-lsp": "server/index.js"},
+  "engines": {"node": ">=18"}
 }

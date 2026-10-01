@@ -5,7 +5,7 @@ option(INSTALL_FISH    "Install Fish shell completions"  OFF)
 option(INSTALL_ZSH     "Install Zsh shell completions"   OFF)
 option(INSTALL_BASH    "Install Bash shell completions"  OFF)
 option(INSTALL_VIM     "Install Vim/Neovim integration"  OFF)
-option(INSTALL_LSP     "Install LSP scaffold"            OFF)
+option(INSTALL_LSP     "Install LSP server"            OFF)
 option(INSTALL_SUBLIME "Install Sublime Text syntax"     OFF)
 
 set(SATIE_SHARE ${CMAKE_INSTALL_DATADIR}/satie)

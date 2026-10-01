@@ -112,4 +112,6 @@ TEST_CASE ("DIMACS comments, terminators, and empty clauses flow through public 
   REQUIRE_THROWS_AS (parse ("p cnf 1 1\n1\n", ParseFormat::DIMACS), ParseError);
 }
 
+#include "test_theory.hpp"
+
 SATIE_RUN_MAIN

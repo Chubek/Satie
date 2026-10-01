@@ -1,9 +1,8 @@
 #pragma once
 
-#include <stdexcept>
 #include <string>
 #include <string_view>
-#include "Common.hpp"
+#include "SatieCDCL.hpp"
 
 namespace satie::isl
 {
@@ -13,16 +12,19 @@ class ISLSolver
 {
 public:
   ISLSolver () = default;
+  explicit ISLSolver (CNF cnf) : cnf_ (std::move (cnf)) {}
 
   [[nodiscard]] static constexpr std::string_view theory_name () noexcept
   {
     return "ISL";
   }
 
-  SolveResult check () const
-  {
-    throw std::runtime_error ("SMT theory module 'ISL' solver is not yet fully implemented.");
-  }
+  void load (CNF cnf) { cnf_ = std::move (cnf); }
+  const CNF &problem () const noexcept { return cnf_; }
+  SolveResult check () const { return solve_cdcl (cnf_); }
+
+private:
+  CNF cnf_{};
 };
 
 } // namespace satie::isl

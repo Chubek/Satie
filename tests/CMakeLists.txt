@@ -21,6 +21,6 @@ include(CTest)
 add_test(NAME satie_tests COMMAND satie_tests)
 
 # SAT core tests can run even when optional plugin headers are unavailable.
-add_executable(satie_sat_tests satie_sat_tests.cpp)
+add_executable(satie_sat_tests satie_sat_tests.cpp test_theory.hpp)
 target_link_libraries(satie_sat_tests PRIVATE satie::satie)
 add_test(NAME satie_sat_tests COMMAND satie_sat_tests)

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 
 project(Satie
   VERSION 0.1.0
-  LANGUAGES CXX
+  LANGUAGES C CXX
   DESCRIPTION "Small, header-only, multi-algorithm SAT solver")
 
 # ------------------------------------------------------------
@@ -31,8 +31,7 @@ option(BUILD_STDPLUGIN "Build the standard Satie plugins"              ON)
 # ------------------------------------------------------------
 # Engine library  (namespaced: satie::satie)
 # ------------------------------------------------------------
-add_library(satie STATIC
-  src/Satie.cpp)
+add_library(satie STATIC)
 add_library(satie::satie ALIAS satie)
 
 target_include_directories(satie
@@ -48,6 +47,8 @@ target_compile_options(satie PRIVATE
 file(GLOB SATIE_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp)
 target_sources(satie PRIVATE ${SATIE_HEADERS})
 
+add_subdirectory(src)
+
 # ------------------------------------------------------------
 # Subdirectories (conditional)
 # ------------------------------------------------------------
@@ -58,6 +59,9 @@ endif()
 if(INSTALL_CLI)
   add_subdirectory(cli)
 endif()
+
+add_subdirectory(frontends)
+add_subdirectory(stdlib)
 
 if(BUILD_TESTING)
   enable_testing()
@@ -83,19 +87,15 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING PATTERN "*.hpp")
 
+# Ship only bundled dependency headers that actually exist in this archive.
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/include/QaMRpp.hpp
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/include/QaMRpp-Plugin.hpp
   DESTINATION third_party/QaMRpp/include)
 
 install(FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/lib/QaMRpp-Library.h
-  DESTINATION third_party/QaMRpp/lib)
-
-install(FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/third_party/SerdeTk/SerdeTk.hpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/third_party/SerdeTk/DSLUtils.hpp
-  DESTINATION third_party/QaMRpp/third_party/SerdeTk)
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/QaMRpp/qlib/C/QaMRpp-Library.h
+  DESTINATION third_party/QaMRpp/qlib/C)
 
 install(EXPORT SatieTargets
   FILE SatieTargets.cmake
