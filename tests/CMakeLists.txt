@@ -12,10 +12,13 @@ add_executable(satie_tests
   test_capi.hpp
   test_module.hpp
   test_dt.hpp
-  test_frontends.hpp)
+  test_frontends.hpp
+  test_stdlib.hpp)
 
-target_link_libraries(satie_tests PRIVATE satie::satie)
+target_link_libraries(satie_tests PRIVATE satie::satie satie::stdlib)
 target_include_directories(satie_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(satie_tests PRIVATE
+  SATIE_STDLIB_DIR="${CMAKE_SOURCE_DIR}/stdlib")
 
 # Compile flags inherited from the satie target; keep tests strict too.
 target_compile_options(satie_tests PRIVATE

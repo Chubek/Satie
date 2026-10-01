@@ -2,6 +2,8 @@
 
 #include "catch_shim.hpp"
 
+#include "Satie.h"
+#include "SatiePlugin.hpp"
 #include "Stdlib.hpp"
 
 #include <filesystem>

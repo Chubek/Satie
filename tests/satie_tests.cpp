@@ -6,4 +6,5 @@
 #include "test_module.hpp"
 #include "test_dt.hpp"
 #include "test_frontends.hpp"
+#include "test_stdlib.hpp"
 SATIE_RUN_MAIN
