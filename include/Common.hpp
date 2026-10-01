@@ -36,6 +36,85 @@ constexpr Lit make_literal (Var var, bool negated = false)
 constexpr Var literal_var (Lit lit) { return lit < 0 ? -lit : lit; }
 constexpr bool is_negated (Lit lit) { return lit < 0; }
 constexpr Lit negate (Lit lit) { return -lit; }
+constexpr Lit abs_literal (Lit lit) { return lit < 0 ? -lit : lit; }
+
+/// Variables are 1-based; zero is the DIMACS terminator and never a variable.
+constexpr Var first_variable = 1;
+
+/// Clause utilities ------------------------------------------------------
+
+/// A clause is a tautology when it contains some literal and its complement.
+/// Such a clause can never be falsified, so solvers may drop it.
+inline bool is_tautology (const Clause &clause)
+{
+  for (std::size_t i = 0; i < clause.size (); ++i)
+    for (std::size_t j = i + 1; j < clause.size (); ++j)
+      if (clause[i] == negate (clause[j]))
+        return true;
+  return false;
+}
+
+/// True when every literal of `a` also occurs in `b`.  Assumes normalized input
+/// (no zeros, sorted, duplicate free); a tautological clause subsumes nothing
+/// because it is never falsified, so callers should filter those out first.
+inline bool clause_subsumes (const Clause &a, const Clause &b)
+{
+  if (a.size () > b.size ())
+    return false;
+  if (a.empty ())
+    return false;
+  std::size_t i = 0, j = 0;
+  while (i < a.size () && j < b.size ())
+    {
+      if (a[i] == b[j])
+        {
+          ++i;
+          ++j;
+        }
+      else if (a[i] < b[j])
+        ++j;
+      else
+        ++i;
+    }
+  return i == a.size ();
+}
+
+inline std::size_t count_positive_literals (const Clause &clause)
+{
+  return static_cast<std::size_t> (
+      std::count_if (clause.begin (), clause.end (), [] (Lit lit) { return lit > 0; }));
+}
+
+inline std::size_t count_negative_literals (const Clause &clause)
+{
+  return clause.size () - count_positive_literals (clause);
+}
+
+/// Largest variable index used by `clause`, or 0 for the empty clause.
+inline Var max_var (const Clause &clause)
+{
+  Var result = 0;
+  for (Lit lit : clause)
+    result = std::max (result, literal_var (lit));
+  return result;
+}
+
+/// Removes duplicate clauses and clauses subsumed by another clause.  Input is
+/// expected to be normalized; output preserves first-occurrence order.
+inline ClauseList deduplicated (const ClauseList &clauses)
+{
+  ClauseList out;
+  out.reserve (clauses.size ());
+  for (const Clause &clause : clauses)
+    {
+      const bool duplicate = std::any_of (out.begin (), out.end (), [&clause] (const Clause &seen) {
+        return seen == clause || clause_subsumes (seen, clause);
+      });
+      if (!duplicate)
+        out.push_back (clause);
+    }
+  return out;
+}
 
 enum class Value : std::uint8_t
 {
@@ -68,7 +147,10 @@ public:
 
   void resize (std::size_t variable_count)
   {
-    values_.resize (variable_count + 1, Value::UNKNOWN);
+    // Grow-only: shrinking would silently discard assignments that the caller
+    // still expects to be readable through get_var().
+    if (variable_count + 1 > values_.size ())
+      values_.resize (variable_count + 1, Value::UNKNOWN);
   }
   std::size_t size () const { return values_.empty () ? 0 : values_.size () - 1; }
 
@@ -108,6 +190,62 @@ public:
       values_[static_cast<std::size_t> (v)] = Value::UNKNOWN;
   }
   bool is_assigned (Var v) const { return get_var (v) != Value::UNKNOWN; }
+
+  /// Number of variables that currently carry a definite value.
+  std::size_t assigned_count () const
+  {
+    std::size_t total = 0;
+    for (std::size_t i = first_variable; i < values_.size (); ++i)
+      if (values_[i] != Value::UNKNOWN)
+        ++total;
+    return total;
+  }
+
+  /// True when every variable in `1 .. size()` has a definite value.
+  bool fully_assigned () const { return assigned_count () == size (); }
+
+  void assign_all (bool value)
+  {
+    for (std::size_t i = first_variable; i < values_.size (); ++i)
+      values_[i] = value ? Value::TRUE : Value::FALSE;
+  }
+
+  void clear ()
+  {
+    for (std::size_t i = first_variable; i < values_.size (); ++i)
+      values_[i] = Value::UNKNOWN;
+  }
+
+  /// Calls `fn(Var, Value)` for every variable with a definite value.
+  template <typename Fn> void for_each_assigned (Fn &&fn) const
+  {
+    for (std::size_t i = first_variable; i < values_.size (); ++i)
+      if (values_[i] != Value::UNKNOWN)
+        fn (static_cast<Var> (i), values_[i]);
+  }
+
+  /// A total assignment extended with `value` for still-unknown variables is
+  /// useful for models of formulas with don't-care variables.
+  Assignment completed (bool value = true) const
+  {
+    Assignment out = *this;
+    out.assign_all (value);
+    return out;
+  }
+
+  friend bool operator== (const Assignment &lhs, const Assignment &rhs)
+  {
+    if (lhs.size () != rhs.size ())
+      return false;
+    for (std::size_t i = first_variable; i <= lhs.size (); ++i)
+      if (lhs.get_var (static_cast<Var> (i)) != rhs.get_var (static_cast<Var> (i)))
+        return false;
+    return true;
+  }
+  friend bool operator!= (const Assignment &lhs, const Assignment &rhs)
+  {
+    return !(lhs == rhs);
+  }
 
   std::string dump () const
   {
@@ -167,6 +305,8 @@ public:
     normalize_clause (clause);
     if (clause.empty ())
       has_empty_clause_ = true;
+    else if (!has_tautology_ && is_tautology (clause))
+      has_tautology_ = true;
     for (Lit lit : clause)
       variable_count_ = std::max<std::size_t> (variable_count_, literal_var (lit));
     clauses_.push_back (std::move (clause));
@@ -185,18 +325,70 @@ public:
   bool empty () const { return clauses_.empty (); }
   bool has_empty_clause () const { return has_empty_clause_; }
 
+  /// Tautologies are kept verbatim by `add_clause` so that the container is a
+  /// faithful record of its input; solvers drop them while preprocessing.
+  bool has_tautology () const { return has_tautology_; }
+
+  /// Clauses after dropping tautologies.  Semantics preserving: a tautological
+  /// clause is satisfied by every total assignment.
+  ClauseList clauses_without_tautologies () const
+  {
+    ClauseList out;
+    out.reserve (clauses_.size ());
+    for (const Clause &clause : clauses_)
+      if (!is_tautology (clause))
+        out.push_back (clause);
+    return out;
+  }
+
+  /// Semantics-preserving simplification: drop tautologies and duplicate or
+  /// subsumed clauses.  Never changes satisfiability.
+  CNF simplified () const
+  {
+    return CNF (deduplicated (clauses_without_tautologies ()));
+  }
+
   void normalize ()
   {
     variable_count_ = declared_variable_count_;
     has_empty_clause_ = false;
+    has_tautology_ = false;
     for (Clause &clause : clauses_)
       {
         normalize_clause (clause);
         if (clause.empty ())
           has_empty_clause_ = true;
+        else if (!has_tautology_ && is_tautology (clause))
+          has_tautology_ = true;
         for (Lit lit : clause)
           variable_count_ = std::max<std::size_t> (variable_count_, literal_var (lit));
       }
+  }
+
+  /// Literal occurrences of every variable; index 0 stays unused.
+  std::vector<std::size_t> variable_occurrences () const
+  {
+    std::vector<std::size_t> counts (variable_count_ + 1, 0);
+    for (const Clause &clause : clauses_)
+      for (Lit lit : clause)
+        ++counts[static_cast<std::size_t> (literal_var (lit))];
+    return counts;
+  }
+
+  friend bool operator== (const CNF &lhs, const CNF &rhs)
+  {
+    return lhs.clauses_ == rhs.clauses_ && lhs.variable_count_ == rhs.variable_count_ &&
+           lhs.declared_variable_count_ == rhs.declared_variable_count_ &&
+           lhs.has_empty_clause_ == rhs.has_empty_clause_;
+  }
+  friend bool operator!= (const CNF &lhs, const CNF &rhs) { return !(lhs == rhs); }
+
+  /// Disjoint union: `CNF` is a conjunction, so `&` concatenates clauses.
+  friend CNF operator& (CNF lhs, const CNF &rhs)
+  {
+    for (const Clause &clause : rhs.clauses_)
+      lhs.add_clause (clause);
+    return lhs;
   }
 
   std::string dump () const
@@ -237,7 +429,15 @@ private:
   std::size_t variable_count_ = 0;
   std::size_t declared_variable_count_ = 0;
   bool has_empty_clause_ = false;
+  bool has_tautology_ = false;
 };
+
+/// Semantics-preserving CNF simplification: tautologies, duplicates, subsumed
+/// clauses.  Unit clauses are kept (they are not implied away).
+inline CNF simplify (const CNF &cnf)
+{
+  return cnf.simplified ();
+}
 
 struct DIMACS
 {
@@ -257,10 +457,13 @@ inline CNF dimacs_to_cnf (DIMACS dimacs)
   return cnf;
 }
 
-inline std::string to_dimacs_string (const CNF &cnf)
+/// Emits DIMACS CNF text.  Clause literals are written in the normalized
+/// (sorted by variable, negatives first) order and terminated by `0`.
+inline std::string to_dimacs_string (const CNF &cnf, bool with_header = true)
 {
   std::ostringstream oss;
-  oss << "p cnf " << cnf.variable_count () << ' ' << cnf.clause_count () << '\n';
+  if (with_header)
+    oss << "p cnf " << cnf.variable_count () << ' ' << cnf.clause_count () << '\n';
   for (const Clause &clause : cnf.clauses ())
     {
       for (Lit lit : clause)
@@ -326,6 +529,10 @@ class DimacsParser
 public:
   explicit DimacsParser (std::istream &input) : input_ (input) {}
 
+  /// Parses a DIMACS CNF stream.  Comments (`c` lines), a `%` end-of-file
+  /// marker (SATLIB convention), and CRLF line endings are accepted.  The
+  /// problem line is optional, but when present the declared variable and
+  /// clause counts are enforced.
   CNF parse ()
   {
     std::string line;
@@ -341,6 +548,8 @@ public:
         std::size_t first = first_non_ws (line);
         if (first == std::string::npos || line[first] == 'c')
           continue;
+        if (line[first] == '%')
+          break;
         if (line[first] == 'p')
           {
             if (declared_vars)
@@ -551,6 +760,15 @@ private:
 };
 
 inline CNF parse_cnf (const std::string &text) { return CNFParser (text).parse (); }
+inline CNF parse_cnf_file (const std::string &path)
+{
+  std::ifstream file (path);
+  if (!file)
+    throw std::runtime_error ("failed to open CNF file: " + path);
+  std::ostringstream buffer;
+  buffer << file.rdbuf ();
+  return parse_cnf (buffer.str ());
+}
 
 struct ProblemDAG
 {
@@ -642,6 +860,42 @@ inline std::ostream &operator<< (std::ostream &os, const CNF &cnf)
       os << cnf.clauses ()[i];
     }
   return os;
+}
+
+inline std::ostream &operator<< (std::ostream &os, SolveStatus status)
+{
+  switch (status)
+    {
+    case SolveStatus::SAT:
+      return os << "SAT";
+    case SolveStatus::UNSAT:
+      return os << "UNSAT";
+    case SolveStatus::UNKNOWN:
+      return os << "UNKNOWN";
+    }
+  return os;
+}
+
+/// DIMACS rendering of a clause: space separated literals plus the `0`
+/// terminator, without a trailing space.
+inline std::string to_dimacs_clause_string (const Clause &clause)
+{
+  std::ostringstream oss;
+  for (std::size_t i = 0; i < clause.size (); ++i)
+    {
+      if (i)
+        oss << ' ';
+      oss << clause[i];
+    }
+  oss << " 0";
+  return oss.str ();
+}
+
+inline std::string to_string (SolveStatus status)
+{
+  std::ostringstream oss;
+  oss << status;
+  return oss.str ();
 }
 
 } // namespace satie
