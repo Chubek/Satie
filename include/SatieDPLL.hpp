@@ -196,4 +196,7 @@ inline SolveResult solve_dpll (const CNF &cnf)
 }
 inline bool is_satisfiable_dpll (const CNF &cnf) { return solve_dpll (cnf).satisfiable (); }
 
+/// Version anchor defined in src/SatieDPLL.cpp.
+const char *dpll_component_version () noexcept;
+
 } // namespace satie

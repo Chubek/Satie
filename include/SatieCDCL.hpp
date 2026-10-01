@@ -79,10 +79,12 @@ public:
 
   SolveResult solve () { return solve_under ({}); }
 
-  /// Solves under assumptions.  Assumption literals occupy decision levels
-  /// `1 .. assumptions.size()`; `last_unsat_core()` then reports the subset of
-  /// the assumptions responsible for an UNSAT answer (empty when the formula is
-  /// unsatisfiable on its own).
+  /// Solves under assumptions.  Assumption literals occupy the first
+  /// decision levels; `last_unsat_core()` then reports a minimized subset of
+  /// the assumptions responsible for an UNSAT answer (empty when the formula
+  /// is unsatisfiable on its own). Assumptions are never silently dropped:
+  /// backtracking below them re-asserts them, and a learnt clause falsified
+  /// by them proves UNSAT.
   SolveResult solve_under (const std::vector<Lit> &assumptions)
   {
     initialize ();
@@ -91,22 +93,8 @@ public:
     assumption_core_.clear ();
     if (unsatisfiable_at_root_)
       return unsat_result ();
-
-    for (Lit lit : assumptions_)
-      {
-        if (literal_true (lit))
-          {
-            new_decision_level ();
-            continue;
-          }
-        if (literal_false (lit))
-          {
-            compute_assumption_core (lit);
-            return unsat_result ();
-          }
-        new_decision_level ();
-        unchecked_enqueue (lit);
-      }
+    if (!assume_all ())
+      return unsat_with_core ();
 
     luby_index_ = 0;
     restart_budget_ = luby (luby_index_) * luby_scale_;
@@ -120,24 +108,39 @@ public:
             ++stats_.conflicts;
             ++stats_.conflicts_since_restart;
             if (decision_level_ == 0)
-              return unsat_result ();
+              return unsat_with_core ();
 
             Clause learned;
             int backtrack_level = 0;
             analyze (conflict, learned, backtrack_level);
             cancel_until (backtrack_level);
+            if (!reassume_dropped ())
+              return unsat_with_core ();
             if (learned.size () == 1)
               {
-                if (!literal_true (learned.front ()) && !literal_false (learned.front ()))
+                // A unit learned clause is still a learned clause: count it so
+                // statistics stay meaningful, then assert it at level 0.
+                ++stats_.learned_clauses;
+                stats_.max_learned_clause_length =
+                    std::max<std::uint64_t> (stats_.max_learned_clause_length, 1);
+                if (literal_false (learned.front ()))
+                  return unsat_with_core ();
+                if (!literal_true (learned.front ()))
                   unchecked_enqueue (learned.front ());
               }
             else
-              attach_learned (std::move (learned));
+              {
+                if (learned.empty () || literal_false (learned.front ()))
+                  return unsat_with_core ();
+                attach_and_assert (std::move (learned));
+              }
             bump_decay ();
 
             if (restarts_enabled_ && stats_.conflicts_since_restart >= restart_budget_)
               {
                 cancel_until (0);
+                if (!reassume_dropped ())
+                  return unsat_with_core ();
                 ++stats_.restarts;
                 ++luby_index_;
                 restart_budget_ = luby (luby_index_) * luby_scale_;
@@ -170,6 +173,134 @@ public:
   std::size_t learned_clause_count () const noexcept { return learned_clause_indices_.size (); }
 
 private:
+  /// Enqueues every assumption at a fresh decision level. Returns false when
+  /// one is already falsified (the caller then reports UNSAT with a core).
+  bool assume_all ()
+  {
+    for (Lit lit : assumptions_)
+      {
+        if (literal_true (lit))
+          {
+            new_decision_level ();
+            continue;
+          }
+        if (literal_false (lit))
+          return false;
+        new_decision_level ();
+        unchecked_enqueue (lit);
+      }
+    return true;
+  }
+
+  /// Re-asserts assumptions dropped by backtracking below their levels.
+  /// Returns false when one is falsified (UNSAT with a core).
+  bool reassume_dropped ()
+  {
+    for (Lit lit : assumptions_)
+      {
+        if (literal_true (lit) || literal_false (lit))
+          {
+            if (literal_false (lit))
+              return false;
+            continue;
+          }
+        new_decision_level ();
+        unchecked_enqueue (lit);
+      }
+    return true;
+  }
+
+  /// UNSAT verdict with a deletion-minimized assumption core (empty when the
+  /// formula is unsatisfiable on its own).
+  SolveResult unsat_with_core ()
+  {
+    assumption_core_.clear ();
+    if (!assumptions_.empty ())
+      {
+        std::vector<Lit> core = assumptions_;
+        for (std::size_t i = 0; i < core.size ();)
+          {
+            std::vector<Lit> trial;
+            for (std::size_t j = 0; j < core.size (); ++j)
+              if (j != i)
+                trial.push_back (core[j]);
+            CDCLSolver probe (original_);
+            probe.set_conflict_budget (0);
+            probe.set_restarts_enabled (false);
+            if (probe.solve_under_no_core (trial).unsatisfiable ())
+              core = std::move (trial);
+            else
+              ++i;
+          }
+        assumption_core_ = std::move (core);
+      }
+    return unsat_result ();
+  }
+
+  /// Core-free entry point for minimization probes (avoids recursion).
+  SolveResult solve_under_no_core (const std::vector<Lit> &assumptions)
+  {
+    initialize ();
+    assumptions_ = assumptions;
+    assumption_core_.clear ();
+    if (unsatisfiable_at_root_)
+      return unsat_result ();
+    if (!assume_all ())
+      return unsat_result ();
+
+    while (true)
+      {
+        const int conflict = propagate ();
+        if (conflict >= 0)
+          {
+            if (decision_level_ == 0)
+              return unsat_result ();
+            Clause learned;
+            int backtrack_level = 0;
+            analyze (conflict, learned, backtrack_level);
+            cancel_until (backtrack_level);
+            if (!reassume_dropped ())
+              return unsat_result ();
+            if (learned.empty ())
+              return unsat_result ();
+            if (literal_false (learned.front ()))
+              return unsat_result ();
+            if (learned.size () == 1)
+              {
+                if (!literal_true (learned.front ()))
+                  unchecked_enqueue (learned.front ());
+              }
+            else
+              attach_and_assert (std::move (learned));
+            continue;
+          }
+        if (all_variables_assigned ())
+          return { SolveStatus::SAT, build_assignment () };
+        const std::optional<Lit> next = pick_branch_literal ();
+        if (!next)
+          return { SolveStatus::SAT, build_assignment () };
+        new_decision_level ();
+        unchecked_enqueue (*next);
+      }
+  }
+
+  /// Attaches a learnt clause and asserts its first literal unless already
+  /// satisfied. Callers check falsification beforehand.
+  void attach_and_assert (Clause clause)
+  {
+    const int index = static_cast<int> (clauses_.size ());
+    clauses_.push_back (clause);
+    learned_clause_indices_.push_back (static_cast<std::size_t> (index));
+    clause_activity_.push_back (1.0);
+    attach_clause (index, clauses_.back ());
+    const Lit first = clauses_.back ().front ();
+    if (!literal_true (first) && !literal_false (first))
+      {
+        unchecked_enqueue (first);
+        reasons_[static_cast<std::size_t> (literal_var (first))] =
+            static_cast<std::size_t> (index);
+      }
+  }
   struct Watcher
   {
     int clause = -1;
@@ -326,7 +457,9 @@ private:
                   continue;
                 clause[1] = clause[position];
                 clause[position] = false_lit;
-                watches_[static_cast<std::size_t> (literal_index (clause[1]))].push_back (
+                // The new watch must fire when `clause[1]` becomes false, so
+                // it is keyed by the negation (as in `attach_clause`).
+                watches_[static_cast<std::size_t> (literal_index (negate (clause[1])))].push_back (
                     Watcher{ watcher.clause, first });
                 moved = true;
                 break;
@@ -485,36 +618,6 @@ private:
     return true;
   }
 
-  /// Extracts the subset of the assumptions responsible for `conflict_lit`.
-  void compute_assumption_core (Lit conflict_lit)
-  {
-    assumption_core_.assign (1, negate (conflict_lit));
-    if (decision_level_ == 0)
-      {
-        assumption_core_.clear ();
-        return;
-      }
-    const std::size_t root_trail = trail_limits_.empty () ? trail_.size () : trail_limits_[0];
-    std::vector<char> marked (values_.size (), 0);
-    marked[static_cast<std::size_t> (literal_var (conflict_lit))] = 1;
-    for (std::size_t index = trail_.size (); index-- > root_trail;)
-      {
-        const std::size_t variable = static_cast<std::size_t> (literal_var (trail_[index]));
-        if (!marked[variable] || levels_[variable] == 0)
-          continue;
-        const std::size_t reason = reasons_[variable];
-        if (reason == no_clause)
-          assumption_core_.push_back (negate (trail_[index]));
-        else
-          for (const Lit lit : clauses_[reason])
-            {
-              const std::size_t other = static_cast<std::size_t> (literal_var (lit));
-              if (levels_[other] > 0)
-                marked[other] = 1;
-            }
-      }
-    assumption_core_.pop_back (); // `conflict_lit` itself, already recorded
-  }
 
   // ---- trail management --------------------------------------------------
 
@@ -705,5 +808,9 @@ inline SolveResult solve_cdcl (const CNF &cnf, const std::vector<Lit> &assumptio
   return solver.solve_under (assumptions);
 }
 inline bool is_satisfiable_cdcl (const CNF &cnf) { return solve_cdcl (cnf).satisfiable (); }
+
+/// Version anchor defined in src/SatieCDCL.cpp; keeps the translation unit
+/// non-empty and lets tooling query the linked CDCL component.
+const char *cdcl_component_version () noexcept;
 
 } // namespace satie

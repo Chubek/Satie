@@ -22,4 +22,7 @@ inline SolveResult solve_sat (const std::string &dimacs_or_cnf, Engine engine = 
   return solve (dimacs_or_cnf, engine);
 }
 
+/// Version anchor defined in src/SatieSAT.cpp.
+const char *sat_component_version () noexcept;
+
 } // namespace satie

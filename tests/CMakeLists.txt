@@ -8,7 +8,11 @@ add_executable(satie_tests
   test_common.hpp
   test_dsltk.hpp
   test_plugins.hpp
-  test_solvers.hpp)
+  test_solvers.hpp
+  test_capi.hpp
+  test_module.hpp
+  test_dt.hpp
+  test_frontends.hpp)
 
 target_link_libraries(satie_tests PRIVATE satie::satie)
 target_include_directories(satie_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

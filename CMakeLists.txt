@@ -19,6 +19,11 @@ endif()
 # Default install locations (overridable via GNUInstallDirs).
 include(GNUInstallDirs)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(SatieWarnings)
+include(SatieVersion)
+include(SatieInstall)
+
 # ------------------------------------------------------------
 # Options
 # ------------------------------------------------------------
@@ -27,6 +32,12 @@ option(BUILD_TESTING "Build the Catch2 unit-test suite"                ON)
 option(BUILD_EXAMPLES "Build the example programs"                     ON)
 option(GENERATE_DOCS "Generate Doxygen documentation"                  OFF)
 option(BUILD_STDPLUGIN "Build the standard Satie plugins"              ON)
+
+# Registered before any subdirectory so add_test() calls in examples,
+# frontends, and tests all take effect.
+if(BUILD_TESTING)
+  enable_testing()
+endif()
 
 # ------------------------------------------------------------
 # Engine library  (namespaced: satie::satie)
@@ -64,7 +75,6 @@ add_subdirectory(frontends)
 add_subdirectory(stdlib)
 
 if(BUILD_TESTING)
-  enable_testing()
   add_subdirectory(tests)
 endif()
 
@@ -74,6 +84,7 @@ endif()
 
 add_subdirectory(distrib)
 add_subdirectory(docs)
+add_subdirectory(cmake)
 
 # ------------------------------------------------------------
 # Install rules for the library
@@ -85,7 +96,7 @@ install(TARGETS satie
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  FILES_MATCHING PATTERN "*.hpp")
+  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h")
 
 # Ship only bundled dependency headers that actually exist in this archive.
 install(FILES
@@ -101,3 +112,5 @@ install(EXPORT SatieTargets
   FILE SatieTargets.cmake
   NAMESPACE satie::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Satie)
+
+satie_install_package_config ()

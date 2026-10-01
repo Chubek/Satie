@@ -12,7 +12,12 @@ _satie_cli_completion() {
     return 0
   fi
 
-  opts="--help --engine --model"
+  if [[ ${prev} == "--format" ]]; then
+    COMPREPLY=( $(compgen -W "auto cnf dimacs bool wcnf opb smt2 lisp" -- "${cur}") )
+    return 0
+  fi
+
+  opts="--help --engine --model --format"
   if [[ ${cur} == -* ]]; then
     COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
     return 0

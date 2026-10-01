@@ -141,4 +141,7 @@ inline std::uint64_t count_models_naive (const CNF &cnf)
   return solver.count_models ();
 }
 
+/// Version anchor defined in src/SatieNative.cpp.
+const char *native_component_version () noexcept;
+
 } // namespace satie

@@ -39,4 +39,9 @@ private:
   CNF cnf_{};
 };
 
+/// Human-readable logic name. Defined in src/SatieSMT.cpp.
+const char *smt_logic_name (Logic logic) noexcept;
+/// Version anchor defined in src/SatieSMT.cpp.
+const char *smt_component_version () noexcept;
+
 } // namespace satie::smt

@@ -1,6 +1,38 @@
 #include "SatieSequence.hpp"
+#include "SatieModule.hpp"
 
-namespace satie::sequence
+#include <memory>
+
+namespace
 {
-  // Explicit template / module linkage baseline for Sequence
-} // namespace satie::sequence
+// Boolean-abstraction adapter: batch 1 exposes every theory through the
+// uniform TheoryModule registry. Batch 2 replaces each `check` body with a
+// real DPLL(T) decision procedure while keeping this registration intact.
+struct RegisteredModule : satie::TheoryModule
+{
+  std::string_view name () const noexcept override
+  {
+    return satie::sequence::SequenceSolver::theory_name ();
+  }
+  satie::SolveResult check (const satie::CNF &cnf) const override
+  {
+    return satie::sequence::SequenceSolver (cnf).check ();
+  }
+};
+} // namespace
+
+namespace satie
+{
+
+// External-linkage registration hook. Referenced by
+// `ensure_theories_registered()` so static-archive linking cannot discard
+// this translation unit before its registrar runs.
+void satie_register_sequence_theory ()
+{
+  static const TheoryRegistrar kRegistrar{
+      std::string (sequence::SequenceSolver::theory_name ()),
+      [] { return std::make_unique<RegisteredModule> (); }};
+  (void)kRegistrar;
+}
+
+} // namespace satie

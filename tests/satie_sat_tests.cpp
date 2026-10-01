@@ -86,6 +86,65 @@ TEST_CASE ("CDCL learns and backjumps from branching conflicts")
   REQUIRE (solver.statistics ().learned_clauses > 0);
 }
 
+TEST_CASE ("CDCL agrees with native on Tseitin adder circuits")
+{
+  // Regression: a missing negation in the two-watched-literal move logic
+  // once made CDCL report UNSAT on satisfiable Tseitin-encoded adders.
+  // Hand-minimized case: a full adder bit with sum 1 and carry 0.
+  CNF hand ({{ 3 },
+              { -1, -2, -4 },
+              { 1, 2, -4 },
+              { -1, 2, 4 },
+              { 1, -2, 4 },
+              { -4, 3, -5 },
+              { 4, -3, -5 },
+              { -4, -3, 5 },
+              { 4, 3, 5 },
+              { -1, -2, 6 },
+              { 3, -4, 6 },
+              { -6, 1, 2 },
+              { -6, 1, -3 },
+              { -6, 2, -3 },
+              { 5 },
+              { -6 }});
+  for (Engine engine : { Engine::Native, Engine::DPLL, Engine::CDCL })
+    {
+      SolveResult result = solve (hand, engine);
+      REQUIRE (result.satisfiable ());
+      check_model (hand, result);
+    }
+
+  // Randomized XOR chains (parity circuits stress watch moves).
+  std::uint32_t seed = 12345;
+  auto next = [&seed] () { return seed = seed * 1664525u + 1013904223u; };
+  for (int instance = 0; instance < 64; ++instance)
+    {
+      CNF cnf;
+      const int vars = 2 + static_cast<int> (next () % 5);
+      for (int v = 1; v < vars; ++v)
+        {
+          // xor(x_v, x_{v+1}) == out_v via four Tseitin clauses.
+          const int out = vars + v;
+          const Lit a = v, b = v + 1;
+          cnf.add_clause ({ -a, -b, -out });
+          cnf.add_clause ({ a, b, -out });
+          cnf.add_clause ({ -a, b, out });
+          cnf.add_clause ({ a, -b, out });
+        }
+      cnf.add_clause ({ 1 });
+      if ((next () & 1u) != 0)
+        cnf.add_clause ({ -(vars + vars - 1) });
+      SolveResult expected = solve (cnf, Engine::Native);
+      check_model (cnf, expected);
+      for (Engine engine : { Engine::DPLL, Engine::CDCL })
+        {
+          SolveResult actual = solve (cnf, engine);
+          REQUIRE (actual.status == expected.status);
+          check_model (cnf, actual);
+        }
+    }
+}
+
 TEST_CASE ("DPLL resets state and models across solve and load")
 {
   DPLLSolver solver (CNF ({{ 1, 2 }, { -1, 2 }, { 1, -2 }}));

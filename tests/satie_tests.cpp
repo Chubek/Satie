@@ -2,4 +2,8 @@
 #include "test_dsltk.hpp"
 #include "test_plugins.hpp"
 #include "test_solvers.hpp"
+#include "test_capi.hpp"
+#include "test_module.hpp"
+#include "test_dt.hpp"
+#include "test_frontends.hpp"
 SATIE_RUN_MAIN

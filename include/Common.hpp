@@ -656,6 +656,7 @@ public:
       return it->second;
     return "x" + std::to_string (v);
   }
+  std::size_t size () const { return vars_.size (); }
 
 private:
   std::unordered_map<std::string, Var> vars_;
@@ -897,5 +898,10 @@ inline std::string to_string (SolveStatus status)
   oss << status;
   return oss.str ();
 }
+
+/// Version of the linked `satie` static library (matches CMake project version).
+const char *satie_library_version () noexcept;
+/// Human-readable build description (version, standard, compiler).
+std::string satie_library_build_info ();
 
 } // namespace satie

@@ -26,6 +26,13 @@
 8. `7-Possible-Errors.md`
    - Parser, I/O, runtime error taxonomy and defensive integration guidance.
 
+9. `8-Theories.md`
+   - DPLL(T) theory solvers: fragments, soundness contract, limits.
+
+10. `9-Frontends.md`
+   - Input languages: CNF/DIMACS, WCNF/MaxSAT, OPB, SMT-LIB2, IPASIR,
+     SatieLisp (C++ and D ports).
+
 ## Recommended reading order
 
 - Theory: 1 -> 2
