@@ -60,7 +60,18 @@ returns a named model (auxiliaries filtered).
 
 `frontends/Common.d` (DIMACS), `CNF.d` (formulas+Tseitin), `WCNF.d`
 (parse+cost), `OPB.d` (parse+eval), `SMT-LIB2.d` (S-expressions),
-`SatieLisp.d` (parse+eval), `IPASIR.d` (bindings+wrapper). Verified by
-`d_frontends_unittest` (inline unittests) and `d_ipasir_smoke` (links the
-D wrapper against the built static library) whenever a D compiler
-(`ldc2`/`dmd`/`gdc`) is found.
+`SatieLisp.d` (parse+eval), `IPASIR.d` (bindings+wrapper).
+
+When a D compiler (`ldc2`/`dmd`/`gdc`) is found, the default CMake build
+compiles all seven modules into `frontends/libsatie_frontends.a`, exposed
+as the `satie_frontends` target and `satie::frontends` alias. This library
+is built even with `BUILD_TESTING=OFF`. Set `D_COMPILER` to select a compiler
+or `BUILD_D_FRONTENDS=OFF` to disable the D library.
+
+With testing enabled, the build also compiles `d_frontends_unittest`
+(inline unittests) and `d_ipasir_smoke` (links the D wrapper from the
+frontend archive against the C++ solver). CTest runs these executables.
+
+Installation includes the archive and import-compatible sources under
+`share/satie/frontends/satie/`. D consumers can add
+`-I<prefix>/share/satie/frontends` to resolve the `satie.*` modules.
