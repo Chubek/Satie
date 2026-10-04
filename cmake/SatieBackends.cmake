@@ -17,10 +17,9 @@ function(satie_parser_dependency name source_var required_file repository revisi
     message(FATAL_ERROR "Missing ${name}: set ${source_var} to a complete source directory or enable SATIE_FETCH_PARSER_DEPS")
   endif()
   FetchContent_Declare(${name} GIT_REPOSITORY "${repository}" GIT_TAG "${revision}")
-  FetchContent_GetProperties(${name})
-  if(NOT ${name}_POPULATED)
-    FetchContent_Populate(${name})
-  endif()
+  # These pinned repositories have no top-level CMakeLists.txt, so this only
+  # makes their sources available for the satie_glr target below.
+  FetchContent_MakeAvailable(${name})
   set(${source_var} "${${name}_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
