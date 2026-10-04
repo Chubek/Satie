@@ -37,7 +37,13 @@ public:
   void release ();
 
 private:
-  void *do_allocate (std::size_t bytes, std::size_t alignment) override;
+  // Keep the allocation hook visible so PMR calls can devirtualize to this
+  // resource instead of speculating on an unrelated standard-library resource.
+  void *do_allocate (std::size_t bytes, std::size_t alignment) override
+  {
+    return allocate_impl (bytes, alignment);
+  }
+  void *allocate_impl (std::size_t bytes, std::size_t alignment);
   void do_deallocate (void *pointer, std::size_t bytes, std::size_t alignment) override;
   bool do_is_equal (const std::pmr::memory_resource &other) const noexcept override;
   struct Impl;

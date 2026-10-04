@@ -63,7 +63,7 @@ MemoryResource::MemoryResource (MemoryLifetime lifetime, std::size_t block_bytes
 }
 MemoryResource::~MemoryResource () = default;
 
-void *MemoryResource::do_allocate (std::size_t bytes, std::size_t alignment)
+void *MemoryResource::allocate_impl (std::size_t bytes, std::size_t alignment)
 {
   if (!DomMEMTk::is_power_of_two (alignment))
     throw std::bad_alloc ();
